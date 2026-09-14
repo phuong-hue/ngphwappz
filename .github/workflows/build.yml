@@ -12,58 +12,64 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Locate Xcode Project
+      - name: Setup Project Environment
         run: |
-          PROJ=$(find . -name "ThreeOneOSFive.xcodeproj" -type d | head -n 1)
-          if [ -z "$PROJ" ]; then
+          xcodebuild -version
+          
+          # Tìm vị trí chính xác của file xcodeproj
+          PROJ_PATH=$(find . -name "ThreeOneOSFive.xcodeproj" -type d | head -n 1)
+          if [ -z "$PROJ_PATH" ]; then
             echo "Không tìm thấy ThreeOneOSFive.xcodeproj!"
             exit 1
           fi
-          WORKDIR=$(dirname "$PROJ")
-          echo "WORKDIR=$WORKDIR" >> $GITHUB_ENV
-          echo "Thư mục dự án: $WORKDIR"
-
-      - name: Build iOS App (.app)
-        run: |
-          cd "$WORKDIR"
-          mkdir -p build
           
-          echo "Bắt đầu biên dịch target 3105..."
-          xcodebuild build \
+          PROJ_DIR=$(dirname "$PROJ_PATH")
+          echo "PROJECT_DIR=$PROJ_DIR" >> $GITHUB_ENV
+          cd "$PROJ_DIR"
+          
+          # Lấy danh sách targets/schemes thực tế của dự án để tránh hardcode sai tên
+          echo "=== DANH SÁCH TARGETS THỰC TẾ ==="
+          xcodebuild -project ThreeOneOSFive.xcodeproj -list
+
+      - name: Build iOS App (Fix Code 65)
+        run: |
+          cd "$PROJECT_DIR"
+          
+          # Sử dụng Target gốc "ThreeOneOSFive" bọc trong cấu hình Release không cần ký số
+          xcodebuild clean build \
             -project ThreeOneOSFive.xcodeproj \
-            -target 3105 \
+            -target ThreeOneOSFive \
             -configuration Release \
             -sdk iphoneos \
-            SYMROOT="$(pwd)/build" \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath ./build_output \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="" \
-            PROVISIONING_PROFILE_SPECIFIER=""
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
 
       - name: Package into IPA
         run: |
-          cd "$WORKDIR"
+          cd "$PROJECT_DIR"
           rm -rf Payload Delta_3105.ipa
           mkdir -p Payload
           
-          APP_PATH=$(find build -name "*.app" -type d | head -n 1)
+          APP_PATH=$(find ./build_output -name "*.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
-            echo "Lỗi: Không tìm thấy thư mục .app!"
+            echo "Lỗi: Không tìm thấy thư mục .app sau khi biên dịch!"
             exit 1
           fi
           
-          echo "Đã tìm thấy app tại: $APP_PATH"
+          echo "Tìm thấy app tại: $APP_PATH"
           cp -r "$APP_PATH" Payload/
           zip -qr Delta_3105.ipa Payload
-          echo "=== ĐÃ ĐÓNG GÓI THÀNH CÔNG DELTA_3105.IPA ==="
+          echo "=== ĐÃ ĐÓNG GÓI IPA THÀNH CÔNG ==="
           ls -lh Delta_3105.ipa
-          echo "IPA_FILE=$WORKDIR/Delta_3105.ipa" >> $GITHUB_ENV
+          echo "FINAL_IPA_PATH=$PROJECT_DIR/Delta_3105.ipa" >> $GITHUB_ENV
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Delta_3105_IPA
-          path: ${{ env.IPA_FILE }}
+          path: ${{ env.FINAL_IPA_PATH }}
           retention-days: 7
