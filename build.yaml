@@ -1,0 +1,70 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Inspect Environment & Project
+        run: |
+          xcodebuild -version
+          if [ -d "3105-main/ThreeOneOSFive.xcodeproj" ]; then
+            echo "PROJECT_DIR=3105-main" >> $GITHUB_ENV
+          elif [ -d "ThreeOneOSFive.xcodeproj" ]; then
+            echo "PROJECT_DIR=." >> $GITHUB_ENV
+          else
+            echo "Không tìm thấy ThreeOneOSFive.xcodeproj!"
+            find . -name "*.xcodeproj"
+            exit 1
+          fi
+
+      - name: Build iOS App Target
+        run: |
+          cd $PROJECT_DIR
+          echo "Danh sách targets:"
+          xcodebuild -project ThreeOneOSFive.xcodeproj -list
+          
+          xcodebuild clean build \
+            -project ThreeOneOSFive.xcodeproj \
+            -target 3105 \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ./build_output \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Package into IPA
+        run: |
+          cd $PROJECT_DIR
+          rm -rf Payload Delta_3105.ipa
+          mkdir -p Payload
+          
+          APP_PATH=$(find ./build_output/Build/Products -name "*.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Lỗi: Không tìm thấy tệp .app sau khi build!"
+            exit 1
+          fi
+          
+          echo "Tìm thấy app tại: $APP_PATH"
+          cp -r "$APP_PATH" Payload/
+          zip -qr Delta_3105.ipa Payload
+          echo "=== ĐÃ ĐÓNG GÓI IPA THÀNH CÔNG ==="
+          ls -lh Delta_3105.ipa
+          echo "IPA_PATH=$PROJECT_DIR/Delta_3105.ipa" >> $GITHUB_ENV
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Delta_3105_IPA
+          path: ${{ env.IPA_PATH }}
+          retention-days: 7
