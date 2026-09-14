@@ -1,0 +1,6 @@
+{
+  "name": "Delta IPA VN",
+  "description": "Giao diện quản lý Proxy, Định vị và Mod nhân vật game Free Fire.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
