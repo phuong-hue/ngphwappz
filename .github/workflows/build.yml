@@ -31,12 +31,12 @@ jobs:
           echo "Danh sách targets:"
           xcodebuild -project ThreeOneOSFive.xcodeproj -list
           
+          # Đã loại bỏ -destination để tránh lỗi exit code 64
           xcodebuild clean build \
             -project ThreeOneOSFive.xcodeproj \
             -target 3105 \
             -configuration Release \
             -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
             -derivedDataPath ./build_output \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
