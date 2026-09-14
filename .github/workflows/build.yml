@@ -12,98 +12,58 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Project & Scheme
+      - name: Locate Xcode Project
         run: |
-          xcodebuild -version
-          
-          # Tìm thư mục chứa ThreeOneOSFive.xcodeproj
-          PROJ_PATH=$(find . -name "ThreeOneOSFive.xcodeproj" -type d | head -n 1)
-          if [ -z "$PROJ_PATH" ]; then
+          PROJ=$(find . -name "ThreeOneOSFive.xcodeproj" -type d | head -n 1)
+          if [ -z "$PROJ" ]; then
             echo "Không tìm thấy ThreeOneOSFive.xcodeproj!"
             exit 1
           fi
-          
-          PROJ_DIR=$(dirname "$PROJ_PATH")
-          echo "PROJECT_DIR=$PROJ_DIR" >> $GITHUB_ENV
-          cd "$PROJ_DIR"
-          
-          # Tự động tạo shared scheme 3105 trên máy ảo để Xcode build chuẩn
-          mkdir -p ThreeOneOSFive.xcodeproj/xcshareddata/xcschemes
-          cat << 'EOF' > ThreeOneOSFive.xcodeproj/xcshareddata/xcschemes/3105.xcscheme
-          <?xml version="1.0" encoding="UTF-8"?>
-          <Scheme
-             LastUpgradeVersion = "1600"
-             version = "1.7">
-             <BuildAction
-                parallelizeBuildables = "YES"
-                buildImplicitDependencies = "YES"
-                buildArchitectures = "Automatic">
-                <BuildActionEntries>
-                   <BuildActionEntry
-                      buildForTesting = "YES"
-                      buildForRunning = "YES"
-                      buildForProfiling = "YES"
-                      buildForArchiving = "YES"
-                      buildForAnalyzing = "YES">
-                      <BuildableReference
-                         BuildableIdentifier = "primary"
-                         BlueprintIdentifier = "3105A500"
-                         BuildableName = "3105.app"
-                         BlueprintName = "3105"
-                         ReferencedContainer = "container:ThreeOneOSFive.xcodeproj">
-                      </BuildableReference>
-                   </BuildActionEntry>
-                </BuildActionEntries>
-             </BuildAction>
-             <ArchiveAction
-                buildConfiguration = "Release"
-                revealArchiveInOrganizer = "YES">
-             </ArchiveAction>
-          </Scheme>
-          EOF
-          
-          echo "Danh sách schemes sau khi tạo:"
-          xcodebuild -project ThreeOneOSFive.xcodeproj -list
+          WORKDIR=$(dirname "$PROJ")
+          echo "WORKDIR=$WORKDIR" >> $GITHUB_ENV
+          echo "Thư mục dự án: $WORKDIR"
 
-      - name: Build iOS App
+      - name: Build iOS App (.app)
         run: |
-          cd "$PROJECT_DIR"
+          cd "$WORKDIR"
+          mkdir -p build
           
-          # Build bằng scheme 3105 chuẩn iOS
-          xcodebuild clean build \
+          echo "Bắt đầu biên dịch target 3105..."
+          xcodebuild build \
             -project ThreeOneOSFive.xcodeproj \
-            -scheme 3105 \
+            -target 3105 \
             -configuration Release \
             -sdk iphoneos \
-            -destination "generic/platform=iOS" \
-            -derivedDataPath ./build_output \
+            SYMROOT="$(pwd)/build" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER=""
 
       - name: Package into IPA
         run: |
-          cd "$PROJECT_DIR"
+          cd "$WORKDIR"
           rm -rf Payload Delta_3105.ipa
           mkdir -p Payload
           
-          APP_PATH=$(find ./build_output -name "*.app" -type d | head -n 1)
+          APP_PATH=$(find build -name "*.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
-            echo "Lỗi: Không tìm thấy thư mục .app sau khi biên dịch!"
+            echo "Lỗi: Không tìm thấy thư mục .app!"
             exit 1
           fi
           
-          echo "Tìm thấy app tại: $APP_PATH"
+          echo "Đã tìm thấy app tại: $APP_PATH"
           cp -r "$APP_PATH" Payload/
           zip -qr Delta_3105.ipa Payload
-          echo "=== ĐÃ ĐÓNG GÓI IPA THÀNH CÔNG ==="
+          echo "=== ĐÃ ĐÓNG GÓI THÀNH CÔNG DELTA_3105.IPA ==="
           ls -lh Delta_3105.ipa
-          echo "FINAL_IPA_PATH=$PROJECT_DIR/Delta_3105.ipa" >> $GITHUB_ENV
+          echo "IPA_FILE=$WORKDIR/Delta_3105.ipa" >> $GITHUB_ENV
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Delta_3105_IPA
-          path: ${{ env.FINAL_IPA_PATH }}
+          path: ${{ env.IPA_FILE }}
           retention-days: 7
