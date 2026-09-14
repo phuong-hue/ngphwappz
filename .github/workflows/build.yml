@@ -12,31 +12,70 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Inspect Environment & Project
+      - name: Setup Project & Scheme
         run: |
           xcodebuild -version
-          if [ -d "3105-main/ThreeOneOSFive.xcodeproj" ]; then
-            echo "PROJECT_DIR=3105-main" >> $GITHUB_ENV
-          elif [ -d "ThreeOneOSFive.xcodeproj" ]; then
-            echo "PROJECT_DIR=." >> $GITHUB_ENV
-          else
+          
+          # Tìm thư mục chứa ThreeOneOSFive.xcodeproj
+          PROJ_PATH=$(find . -name "ThreeOneOSFive.xcodeproj" -type d | head -n 1)
+          if [ -z "$PROJ_PATH" ]; then
             echo "Không tìm thấy ThreeOneOSFive.xcodeproj!"
-            find . -name "*.xcodeproj"
             exit 1
           fi
-
-      - name: Build iOS App Target
-        run: |
-          cd $PROJECT_DIR
-          echo "Danh sách targets:"
-          xcodebuild -project ThreeOneOSFive.xcodeproj -list
           
-          # Đã loại bỏ -destination để tránh lỗi exit code 64
+          PROJ_DIR=$(dirname "$PROJ_PATH")
+          echo "PROJECT_DIR=$PROJ_DIR" >> $GITHUB_ENV
+          cd "$PROJ_DIR"
+          
+          # Tự động tạo shared scheme 3105 trên máy ảo để Xcode build chuẩn
+          mkdir -p ThreeOneOSFive.xcodeproj/xcshareddata/xcschemes
+          cat << 'EOF' > ThreeOneOSFive.xcodeproj/xcshareddata/xcschemes/3105.xcscheme
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Scheme
+             LastUpgradeVersion = "1600"
+             version = "1.7">
+             <BuildAction
+                parallelizeBuildables = "YES"
+                buildImplicitDependencies = "YES"
+                buildArchitectures = "Automatic">
+                <BuildActionEntries>
+                   <BuildActionEntry
+                      buildForTesting = "YES"
+                      buildForRunning = "YES"
+                      buildForProfiling = "YES"
+                      buildForArchiving = "YES"
+                      buildForAnalyzing = "YES">
+                      <BuildableReference
+                         BuildableIdentifier = "primary"
+                         BlueprintIdentifier = "3105A500"
+                         BuildableName = "3105.app"
+                         BlueprintName = "3105"
+                         ReferencedContainer = "container:ThreeOneOSFive.xcodeproj">
+                      </BuildableReference>
+                   </BuildActionEntry>
+                </BuildActionEntries>
+             </BuildAction>
+             <ArchiveAction
+                buildConfiguration = "Release"
+                revealArchiveInOrganizer = "YES">
+             </ArchiveAction>
+          </Scheme>
+          EOF
+          
+          echo "Danh sách schemes sau khi tạo:"
+          xcodebuild -project ThreeOneOSFive.xcodeproj -list
+
+      - name: Build iOS App
+        run: |
+          cd "$PROJECT_DIR"
+          
+          # Build bằng scheme 3105 chuẩn iOS
           xcodebuild clean build \
             -project ThreeOneOSFive.xcodeproj \
-            -target 3105 \
+            -scheme 3105 \
             -configuration Release \
             -sdk iphoneos \
+            -destination "generic/platform=iOS" \
             -derivedDataPath ./build_output \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
@@ -45,13 +84,13 @@ jobs:
 
       - name: Package into IPA
         run: |
-          cd $PROJECT_DIR
+          cd "$PROJECT_DIR"
           rm -rf Payload Delta_3105.ipa
           mkdir -p Payload
           
-          APP_PATH=$(find ./build_output/Build/Products -name "*.app" -type d | head -n 1)
+          APP_PATH=$(find ./build_output -name "*.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
-            echo "Lỗi: Không tìm thấy tệp .app sau khi build!"
+            echo "Lỗi: Không tìm thấy thư mục .app sau khi biên dịch!"
             exit 1
           fi
           
@@ -60,11 +99,11 @@ jobs:
           zip -qr Delta_3105.ipa Payload
           echo "=== ĐÃ ĐÓNG GÓI IPA THÀNH CÔNG ==="
           ls -lh Delta_3105.ipa
-          echo "IPA_PATH=$PROJECT_DIR/Delta_3105.ipa" >> $GITHUB_ENV
+          echo "FINAL_IPA_PATH=$PROJECT_DIR/Delta_3105.ipa" >> $GITHUB_ENV
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Delta_3105_IPA
-          path: ${{ env.IPA_PATH }}
+          path: ${{ env.FINAL_IPA_PATH }}
           retention-days: 7
